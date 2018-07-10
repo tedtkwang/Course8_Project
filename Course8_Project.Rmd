@@ -1,0 +1,188 @@
+
+Title: Predicting How Correctly An Exercise Was Performed
+========================
+
+### Author: Ted Wang
+
+## 1.Executive Summary
+
+People regularly quantify how much of a particular activity they do, but they rarely quantify how well they do it. We have data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of this report is to explain the modelling process and to predict the manner in which they did the exercise. 
+
+The model is targeting to predict a categorical outcome, class A to E, from a data set of 19,622 observations with 159 variables. This report uses four modelling methods and compare their accuracy scores to select the final method to predict on the validation data set (20 observations). Gradient Boosting Machine (GBM) turned out the highest accuracy in predicting the testing set outcome.
+
+## 2.Load the training data and perform exploratory data analyses
+
+```{r loadData,results="hide"}
+pml<-read.csv("pml-training.csv")
+str(pml)
+summary(pml)
+```
+
+## 3.Cleaning the data set
+
+Exploratory data analyses reveal there are numerous variables having too many NAs and blanks as values. Most prediction algorithms won't work well with missing data. The list of removed variables are in the appendix.
+
+To evaluate the effectiveness of different prediction algorithms, 75% of data set is for training and 25% of data set is for testing.
+
+```{r cleanData,results="hide"}
+library(caret)
+library(gbm)
+set.seed(168)
+inTrain<-createDataPartition(y=pml$classe,p=0.75,list=FALSE)   # 75% of data is training set
+rmCol<-c(1,5,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,50,51,52,53,54,55,56,
+         57,58,59,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,
+         103,104,105,106,107,108,109,110,111,112,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,
+         141,142,143,144,145,146,147,148,149,150)   # col 1 is index, other col has too many NAs or blanks
+training<-pml[inTrain,-rmCol]
+testing<-pml[-inTrain,-rmCol]
+```
+
+## 4.Building the models
+
+We have included four different prediction algorithms in our analyses:  
+I) Regression and classification trees (RT) is a decision tree algorithm. A decision tree is simple to undertand and interpret, however it is path-dependent so a small change in the training data can result in a big change in the tree, and thus a big change in final predictions.  
+II) Random Forests (RF) is an extension of Bagging. This algorithm could achieve high prediction accuracy, however it has slow speed, poor interpretability, and is prone to overfitting. Thus, we have used RF along with preprocessing with principal component analysis (PCA). PCA helps to pick out a weighted combination of predictors that capture most information and thus increases modelling speed.  
+III) Gradient Boosting Machine (GBM) is boosting with trees.  
+IV) Linear Discriminant Analysis (LDA) assumes multivariate Gaussian with same covariances.  
+
+As our data set is large, cross validation is done by random sampling without replacement in the training and testing set step.
+
+```{r trainModels,cache=TRUE,message='hide',warning='hide'}
+# Regression and Classification Trees
+modFitRT<-train(classe~.,method="rpart",data=training)
+predRT<-predict(modFitRT,newdata=testing)
+confusionMatrix(testing$classe,predRT) # predictions vs truth
+
+# Random Forests (extension of Bagging) with PCA
+modFitPCARF<-train(classe~.,method="rf",preProcess="pca",data=training,trControl=trainControl(preProcOptions=list(thresh=0.8)))   # set % of variance explained at 80%
+predPCARF<-predict(modFitPCARF,newdata=testing)
+confusionMatrix(testing$classe,predPCARF) # predictions vs truth
+
+# GBM (boosting with trees)
+modFitGBM<-train(classe~.,method="gbm",data=training,verbose=FALSE)   #verbose is FALSE otherwise will produce a lot of output
+predGBM<-predict(modFitGBM,newdata=testing)
+confusionMatrix(testing$classe,predGBM) # predictions vs truth
+
+# Linear Discriminant Analysis
+modFitLDA=train(classe~.,method="lda",data=training)
+predLDA<-predict(modFitLDA,newdata=testing)
+confusionMatrix(testing$classe,predLDA) # predictions vs truth
+```
+
+## 5.Selecting the model
+
+We will choose the model that achieves the highest accuracy in predicting the testing set outcome.  
+Regression classification trees (RT) has accuracy = `r confusionMatrix(testing$classe,predRT)$overall[1]`.  Random Forests (RF) with PCA has accuracy = `r confusionMatrix(testing$classe,predPCARF)$overall[1]`.  Gradient Boosting Machine (GBM) has accuracy = `r confusionMatrix(testing$classe,predGBM)$overall[1]`.  Linear Discriminant Analysis (LDA) has accuracy = `r confusionMatrix(testing$classe,predLDA)$overall[1]`.  
+
+## 6.Predicting the validation data set
+
+```{r predictData}
+validate<-read.csv("pml-testing.csv")
+predict(modFitGBM,newdata=validate)
+```
+
+## Appendix. Columns removed from pml training data set
+
+Col # Name
+1 # X
+5 # cvtd_timestamp
+12 # kurtosis_roll_belt
+13 # kurtosis_picth_belt
+14 # kurtosis_yaw_belt
+15 # skewness_roll_belt
+16 # skewness_roll_belt.1
+17 # skewness_yaw_belt
+18 # max_roll_belt
+19 # max_picth_belt
+20 # max_yaw_belt
+21 # min_roll_belt
+22 # min_pitch_belt
+23 # min_yaw_belt
+24 # amplitude_roll_belt
+25 # amplitude_pitch_belt
+26 # amplitude_yaw_belt
+27 # var_total_accel_belt
+28 # avg_roll_belt
+29 # stddev_roll_belt
+30 # var_roll_belt
+31 # avg_pitch_belt
+32 # stddev_pitch_belt
+33 # var_pitch_belt
+34 # avg_yaw_belt
+35 # stddev_yaw_belt
+36 # var_yaw_belt
+50 # var_accel_arm
+51 # avg_roll_arm
+52 # stddev_roll_arm
+53 # var_roll_arm
+54 # avg_pitch_arm
+55 # stddev_pitch_arm
+56 # var_pitch_arm
+57 # avg_yaw_arm
+58 # stddev_yaw_arm
+59 # var_yaw_arm
+69 # kurtosis_roll_arm
+70 # kurtosis_picth_arm
+71 # kurtosis_yaw_arm
+72 # skewness_roll_arm
+73 # skewness_pitch_arm
+74 # skewness_yaw_arm
+75 # max_roll_arm
+76 # max_picth_arm
+77 # max_yaw_arm
+78 # min_roll_arm
+79 # min_pitch_arm
+80 # min_yaw_arm
+81 # amplitude_roll_arm
+82 # amplitude_pitch_arm
+83 # amplitude_yaw_arm
+87 # kurtosis_roll_dumbbell
+88 # kurtosis_picth_dumbbell
+89 # kurtosis_yaw_dumbbell
+90 # skewness_roll_dumbbell
+91 # skewness_pitch_dumbbell
+92 # skewness_yaw_dumbbell
+93 # max_roll_dumbbell
+94 # max_picth_dumbbell
+95 # max_yaw_dumbbell
+96 # min_roll_dumbbell
+97 # min_pitch_dumbbell
+98 # min_yaw_dumbbell
+99 # amplitude_roll_dumbbell
+100 # amplitude_pitch_dumbbell
+101 # amplitude_yaw_dumbbell
+103 # var_accel_dumbbell
+104 # avg_roll_dumbbell
+105 # stddev_roll_dumbbell
+106 # var_roll_dumbbell
+107 # avg_pitch_dumbbell
+108 # stddev_pitch_dumbbell
+109 # var_pitch_dumbbell
+110 # avg_yaw_dumbbell
+111 # stddev_yaw_dumbbell
+112 # var_yaw_dumbbell
+125 # kurtosis_roll_forearm
+126 # kurtosis_picth_forearm
+127 # kurtosis_yaw_forearm
+128 # skewness_roll_forearm
+129 # skewness_pitch_forearm
+130 # skewness_yaw_forearm
+131 # max_roll_forearm
+132 # max_picth_forearm
+133 # max_yaw_forearm
+134 # min_roll_forearm
+135 # min_pitch_forearm
+136 # min_yaw_forearm
+137 # amplitude_roll_forearm
+138 # amplitude_pitch_forearm
+139 # amplitude_yaw_forearm
+141 # var_accel_forearm
+142 # avg_roll_forearm
+143 # stddev_roll_forearm
+144 # var_roll_forearm
+145 # avg_pitch_forearm
+146 # stddev_pitch_forearm
+147 # var_pitch_forearm
+148 # avg_yaw_forearm
+149 # stddev_yaw_forearm
+150 # var_yaw_forearm
